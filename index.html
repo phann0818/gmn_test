@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kawaii Booth ✨ | Online Photo Booth</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Nunito', sans-serif; background-color: #fff5f7; }
+        .kawaii-shadow { box-shadow: 0 8px 0px #ffcfd9; }
+        .kawaii-btn:active { transform: translateY(4px); box-shadow: 0 4px 0px #ffcfd9; }
+        .frame-preview { transition: all 0.3s ease; cursor: pointer; border: 4px solid transparent; }
+        .frame-preview.active { border-color: #ff85a1; transform: scale(1.05); }
+        #camera-feed { transform: scaleX(-1); border-radius: 20px; }
+        .flash-effect { animation: flash 0.5s ease-out; }
+        @keyframes flash { 0% { background: white; opacity: 1; } 100% { opacity: 0; } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 md:p-8">
+
+    <header class="text-center mb-8">
+        <h1 class="text-4xl md:text-5xl font-900 text-[#ff85a1] mb-2">Kawaii Booth ✨</h1>
+        <p class="text-[#ffaec0] font-bold">Capture your magic moment!</p>
+    </header>
+
+    <main class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <section class="bg-white p-6 rounded-3xl kawaii-shadow border-4 border-[#ffcfd9]">
+            <h2 class="text-xl font-bold text-[#ff85a1] mb-4 flex items-center">
+                <span class="mr-2">🎨</span> Customize Layout
+            </h2>
+            
+            <div class="mb-6">
+                <label class="block text-sm font-bold text-gray-500 mb-2">CHOOSE FRAME</label>
+                <div class="grid grid-cols-3 gap-2" id="frame-selector">
+                    </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-sm font-bold text-gray-500 mb-2">BACKGROUND COLOR</label>
+                <div class="flex flex-wrap gap-2" id="color-selector">
+                    </div>
+            </div>
+        </section>
+
+        <section class="lg:col-span-2 flex flex-col items-center">
+            <div class="relative w-full max-w-md aspect-[3/4] bg-black rounded-[30px] border-8 border-white shadow-2xl overflow-hidden">
+                <video id="video" autoplay playsinline class="w-full h-full object-cover"></video>
+                <div id="flash" class="absolute inset-0 bg-white opacity-0 pointer-events-none"></div>
+                
+                <div id="countdown" class="absolute inset-0 flex items-center justify-center text-white text-9xl font-black hidden">
+                    3
+                </div>
+
+                <div class="absolute bottom-4 left-0 right-0 px-8">
+                    <div class="w-full bg-white/30 h-3 rounded-full overflow-hidden">
+                        <div id="progress" class="bg-[#ff85a1] h-full w-0 transition-all duration-300"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 flex gap-4">
+                <button id="start-btn" class="kawaii-btn bg-[#ff85a1] text-white px-12 py-4 rounded-full font-black text-xl kawaii-shadow hover:bg-[#ff7091] transition-all">
+                    START SESSION ✨
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <div id="result-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white p-6 rounded-[40px] max-w-sm w-full text-center">
+            <h3 class="text-2xl font-black text-[#ff85a1] mb-4">You look lovely! 💕</h3>
+            <div id="result-container" class="mb-6 bg-gray-100 rounded-xl overflow-hidden shadow-inner">
+                <canvas id="final-canvas" class="w-full h-auto"></canvas>
+            </div>
+            <div class="flex flex-col gap-3">
+                <button id="download-btn" class="bg-[#ff85a1] text-white py-3 rounded-2xl font-bold hover:bg-[#ff7091]">Download Photo Strip</button>
+                <button onclick="location.reload()" class="text-gray-400 font-bold hover:text-[#ff85a1]">Retake All</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const startBtn = document.getElementById('start-btn');
+        const countdownEl = document.getElementById('countdown');
+        const flashEl = document.getElementById('flash');
+        const progressEl = document.getElementById('progress');
+        const finalCanvas = document.getElementById('final-canvas');
+        const ctx = finalCanvas.getContext('2d');
+        
+        let frames = [
+            { id: 'f1', color: '#ffffff', deco: '🌸' },
+            { id: 'f2', color: '#ffecf2', deco: '💖' },
+            { id: 'f3', color: '#e0f7fa', deco: '☁️' },
+            { id: 'f4', color: '#f3e5f5', deco: '✨' },
+            { id: 'f5', color: '#fff9c4', deco: '🌟' },
+            { id: 'f6', color: '#000000', deco: '🖤' }
+        ];
+
+        let selectedFrame = frames[0];
+        let photos = [];
+
+        // Initialize UI
+        function init() {
+            const frameContainer = document.getElementById('frame-selector');
+            frames.forEach(f => {
+                const div = document.createElement('div');
+                div.className = `frame-preview h-16 rounded-lg shadow-sm flex items-center justify-center text-2xl`;
+                div.style.backgroundColor = f.color;
+                div.innerHTML = f.deco;
+                div.onclick = () => {
+                    document.querySelectorAll('.frame-preview').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+                    selectedFrame = f;
+                };
+                frameContainer.appendChild(div);
+            });
+            
+            // Camera setup
+            navigator.mediaDevices.getUserMedia({ video: { aspectRatio: 3/4 }, audio: false })
+                .then(stream => { video.srcObject = stream; })
+                .catch(err => alert("Please enable camera access! 🥺"));
+        }
+
+        async function takePhoto() {
+            return new Promise((resolve) => {
+                let count = 3;
+                countdownEl.classList.remove('hidden');
+                
+                const timer = setInterval(() => {
+                    count--;
+                    countdownEl.innerText = count;
+                    if (count === 0) {
+                        clearInterval(timer);
+                        // Flash effect
+                        flashEl.style.opacity = '1';
+                        setTimeout(() => flashEl.style.opacity = '0', 100);
+                        
+                        // Capture
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = video.videoWidth;
+                        tempCanvas.height = video.videoHeight;
+                        const tCtx = tempCanvas.getContext('2d');
+                        tCtx.translate(tempCanvas.width, 0);
+                        tCtx.scale(-1, 1);
+                        tCtx.drawImage(video, 0, 0);
+                        
+                        photos.push(tempCanvas.toDataURL('image/png'));
+                        countdownEl.classList.add('hidden');
+                        countdownEl.innerText = '3';
+                        resolve();
+                    }
+                }, 1000);
+            });
+        }
+
+        startBtn.onclick = async () => {
+            startBtn.disabled = true;
+            startBtn.innerText = "SMILE! 📸";
+            photos = [];
+            
+            for (let i = 1; i <= 4; i++) {
+                await takePhoto();
+                progressEl.style.width = `${(i/4) * 100}%`;
+            }
+            
+            generateStrip();
+        };
+
+        function generateStrip() {
+            // Setup Canvas for 4-cut vertical strip
+            const w = 400;
+            const h = 1200;
+            const padding = 20;
+            const photoH = (h - (padding * 5)) / 4;
+            const photoW = w - (padding * 2);
+
+            finalCanvas.width = w;
+            finalCanvas.height = h;
+
+            // Background/Frame
+            ctx.fillStyle = selectedFrame.color;
+            ctx.fillRect(0, 0, w, h);
+
+            // Draw Photos
+            photos.forEach((src, i) => {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, padding, padding + (i * (photoH + padding)), photoW, photoH);
+                    if (i === 3) {
+                        document.getElementById('result-modal').classList.remove('hidden');
+                    }
+                };
+                img.src = src;
+            });
+        }
+
+        document.getElementById('download-btn').onclick = () => {
+            const link = document.createElement('a');
+            link.download = `KawaiiPhoto_${Date.now()}.png`;
+            link.href = finalCanvas.toDataURL();
+            link.click();
+        };
+
+        init();
+    </script>
+</body>
+</html>
